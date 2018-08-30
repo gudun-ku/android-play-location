@@ -20,13 +20,21 @@ package com.google.android.gms.location.sample.locationupdatesforegroundservice;
 import android.content.Context;
 import android.location.Location;
 import android.preference.PreferenceManager;
-
+import android.util.Log;
+import com.couchbase.lite.URLEndpoint;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.text.DateFormat;
 import java.util.Date;
+
+import static android.content.ContentValues.TAG;
 
 class Utils {
 
     static final String KEY_REQUESTING_LOCATION_UPDATES = "requesting_locaction_updates";
+    static final String SYNC_URL_LINK = "ws://mapvt.artbeer.ru:4984/staging";
 
     /**
      * Returns true if requesting location updates, otherwise returns false.
@@ -62,4 +70,17 @@ class Utils {
         return context.getString(R.string.location_updated,
                 DateFormat.getDateTimeInstance().format(new Date()));
     }
+
+
+    public static URLEndpoint getURLEndpoint() {
+        URI lnkURI;
+        try {
+            lnkURI = new URI( SYNC_URL_LINK );
+        } catch ( URISyntaxException e) {
+            return null;
+        }
+        return new URLEndpoint(lnkURI);
+    }
+    // Create replicators to push and pull changes to and from the cloud.
+
 }

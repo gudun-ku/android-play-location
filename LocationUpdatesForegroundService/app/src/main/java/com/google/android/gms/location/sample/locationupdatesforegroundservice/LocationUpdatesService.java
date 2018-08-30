@@ -36,7 +36,23 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
+import android.widget.Toast;
 
+
+import com.couchbase.lite.BasicAuthenticator;
+import com.couchbase.lite.CouchbaseLiteException;
+import com.couchbase.lite.Database;
+import com.couchbase.lite.DatabaseConfiguration;
+import com.couchbase.lite.Document;
+import com.couchbase.lite.Endpoint;
+import com.couchbase.lite.MutableDocument;
+import com.couchbase.lite.Query;
+
+
+import com.couchbase.lite.Replicator;
+import com.couchbase.lite.ReplicatorChange;
+import com.couchbase.lite.ReplicatorChangeListener;
+import com.couchbase.lite.ReplicatorConfiguration;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
@@ -122,6 +138,9 @@ public class LocationUpdatesService extends Service {
 
     private Handler mServiceHandler;
 
+
+    private Database database;
+
     /**
      * The current location.
      */
@@ -159,6 +178,18 @@ public class LocationUpdatesService extends Service {
 
             // Set the Notification Channel for the Notification Manager.
             mNotificationManager.createNotificationChannel(mChannel);
+        }
+
+        // Database
+        // Get the database (and create it if it doesn’t exist).
+        DatabaseConfiguration config = new DatabaseConfiguration(getApplicationContext());
+        try {
+            database = new Database("mydb", config);
+            // Create replicators to push and pull changes to and from the cloud.
+
+        }catch (CouchbaseLiteException e) {
+            Toast.makeText(getBaseContext(), "Service db connection error!",
+                    Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -332,7 +363,39 @@ public class LocationUpdatesService extends Service {
         // Notify anyone listening for broadcasts about the new location.
         Intent intent = new Intent(ACTION_BROADCAST);
         intent.putExtra(EXTRA_LOCATION, location);
-        LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
+
+        String deviceId = "device 1";
+        Long time = System.currentTimeMillis();
+        Double latitude = location.getLatitude();
+        Double longitude = location.getLongitude();
+        //get the time from GPS - add 3 hours to change UTC TO MSK?
+        Long locationTime = location.getTime();
+        //locationTime = time;
+        //round the altitude - beloushkin@artbeer.ru 03.08.2018
+        Double altitude = Double.valueOf(Math.round(location.getAltitude() * 100) / 100);
+
+        // Write to couchbase client
+        // Create a new document (i.e. a record) in the database.
+        MutableDocument mutableDoc = new MutableDocument()
+                .setFloat("version", 2.0F)
+                .setString("type", "SDK");
+
+        mutableDoc
+                .setString("deviceId",deviceId)
+                .setLong("time",locationTime)
+                .setDouble("latitude",latitude)
+                .setDouble("longitude",longitude)
+                .setDouble("altitude", altitude);
+
+        try {
+            // Save it to the database.
+                    database.save(mutableDoc);
+
+        }catch (CouchbaseLiteException e) {
+            Toast.makeText(getBaseContext(), "Document saving error!",
+                    Toast.LENGTH_SHORT).show();
+        }
+
 
         // Update notification content if running as a foreground service.
         if (serviceIsRunningInForeground(this)) {

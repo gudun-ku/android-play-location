@@ -46,6 +46,19 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
+import com.couchbase.lite.BasicAuthenticator;
+import com.couchbase.lite.CouchbaseLiteException;
+import com.couchbase.lite.Database;
+import com.couchbase.lite.DatabaseConfiguration;
+import com.couchbase.lite.Endpoint;
+import com.couchbase.lite.Replicator;
+import com.couchbase.lite.ReplicatorChange;
+import com.couchbase.lite.ReplicatorChangeListener;
+import com.couchbase.lite.ReplicatorConfiguration;
+import com.couchbase.lite.URLEndpoint;
+
+import java.net.URI;
+
 /**
  * The only activity in this sample.
  *
@@ -84,6 +97,10 @@ public class MainActivity extends AppCompatActivity implements
     // UI elements.
     private Button mRequestLocationUpdatesButton;
     private Button mRemoveLocationUpdatesButton;
+
+    // Database CouchDB lite
+    public  Database database = null;
+    public  Replicator replicator = null;
 
     // Monitors the state of the connection to the service.
     private final ServiceConnection mServiceConnection = new ServiceConnection() {
@@ -150,6 +167,39 @@ public class MainActivity extends AppCompatActivity implements
         // that since this activity is in the foreground, the service can exit foreground mode.
         bindService(new Intent(this, LocationUpdatesService.class), mServiceConnection,
                 Context.BIND_AUTO_CREATE);
+
+        // Database
+        // Get the database (and create it if it doesn’t exist).
+        DatabaseConfiguration config = new DatabaseConfiguration(getApplicationContext());
+        try {
+            database = new Database("mydb", config);
+            // Create replicators to push and pull changes to and from the cloud.
+            Endpoint targetEndpoint = Utils.getURLEndpoint();
+            ReplicatorConfiguration replConfig = new ReplicatorConfiguration(database, targetEndpoint);
+            replConfig.setReplicatorType(ReplicatorConfiguration.ReplicatorType.PUSH);
+            // Add authentication.
+            replConfig.setAuthenticator(new BasicAuthenticator("sync_user", "artBeer_01"));
+            // Create replicator.
+            replicator = new Replicator(replConfig);
+
+            // Listen to replicator change events.
+            replicator.addChangeListener(new ReplicatorChangeListener() {
+                @Override
+                public void changed(ReplicatorChange change) {
+                    if (change.getStatus().getError() != null)
+                        Log.i(TAG, "Error code ::  " + change.getStatus().getError().getCode());
+                }
+            });
+
+
+
+
+
+
+        }catch (CouchbaseLiteException e) {
+            Toast.makeText(MainActivity.this, "Database connection error!",
+                    Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
@@ -157,10 +207,14 @@ public class MainActivity extends AppCompatActivity implements
         super.onResume();
         LocalBroadcastManager.getInstance(this).registerReceiver(myReceiver,
                 new IntentFilter(LocationUpdatesService.ACTION_BROADCAST));
+        // Start replication.
+        replicator.start();
     }
 
     @Override
     protected void onPause() {
+        // Stop replication.
+        replicator.stop();
         LocalBroadcastManager.getInstance(this).unregisterReceiver(myReceiver);
         super.onPause();
     }
